@@ -1,0 +1,109 @@
+---
+title: "Practical Machine Learning Project"
+author: "Chandra Sutrisno Tjhong"
+date: "Friday, April 17, 2015"
+output: html_document
+---
+
+#Introduction
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <a href="http://groupware.les.inf.puc-rio.br/har">http://groupware.les.inf.puc-rio.br/har</a> (see the section on the Weight Lifting Exercise Dataset). 
+
+#Loading Library
+```{r, message=FALSE, warning=FALSE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+```
+
+#Read the Data
+```{r, cache=TRUE}
+getwd()
+path <- '/home/chandra/R/pml'
+training.data <- read.csv(paste(path,'pml-training.csv',sep="/"))
+testing.data <- read.csv(paste(path,'pml-testing.csv',sep="/"))
+```
+
+#Clean the Data
+Remove nearZeroVar columns.
+```{r, cache=TRUE}
+nsv <- nearZeroVar(training.data,saveMetrics = TRUE)
+cols <- rownames(nsv[ which(nsv$nzv==FALSE),])[2:length(rownames(nsv[ which(nsv$nzv==FALSE),]))]
+clean.training.data <- training.data[, cols] 
+cols <- cols[1:length(cols)-1]
+clean.testing.data <- testing.data[, cols]
+```
+
+Remove columns that contain missing values.
+```{r}
+clean.training.data <- clean.training.data[, colSums(is.na(clean.training.data)) == 0] 
+clean.testing.data <- clean.testing.data[, colSums(is.na(clean.testing.data)) == 0] 
+```
+
+Remove columns that not related to the data.
+```{r}
+classe <- clean.training.data$classe
+removeCols <- grepl("^X|timestamp|window", names(clean.training.data))
+clean.training.data <- clean.training.data[, !removeCols]
+clean.training.data <- clean.training.data[, sapply(clean.training.data, is.numeric)]
+clean.training.data$classe <- classe
+
+removeCols <- grepl("^X|timestamp|window", names(clean.testing.data))
+clean.testing.data <- clean.testing.data[, !removeCols]
+clean.testing.data <- clean.testing.data[, sapply(clean.testing.data, is.numeric)]
+```
+
+#Slice the Data
+```{r}
+set.seed(123) # So this can be reproduce
+inTrain <- createDataPartition(clean.training.data$classe, p=0.70, list=F)
+trainData <- clean.training.data[inTrain, ]
+testData <- clean.training.data[-inTrain, ]
+```
+
+#Data Modeling
+We use Random Forest algorithm because it automatically selects important variables and is robust to correlated covariates & outliers in general. We will use 5-fold cross validation when applying the algorithm.
+```{r, cache=TRUE}
+controlRf <- trainControl(method="cv", 5)
+modFit <- train(classe ~ ., data=trainData, method="rf", trControl=controlRf, ntree=250)
+modFit
+```
+  
+Next, estimate the performance of the model on the validation data set.
+```{r cache=TRUE}
+predictRf <- predict(modFit, testData)
+confusionMatrix(testData$classe, predictRf)
+```
+
+Estimated accuracy of the model is
+```{r}
+accuracy <- postResample(predictRf, testData$classe)
+accuracy
+```
+
+estimated out-of-sample error is (%)
+```{r}
+oose <- 1 - as.numeric(confusionMatrix(testData$classe, predictRf)$overall[1])
+oose
+```
+
+#Predicting for Test Data Set
+Apply the model to the original testing data set. Remove the problem_id column first.
+```{r}
+clean.testing.data <- clean.testing.data[,-c(53)]
+result <- predict(modFit, clean.testing.data)
+result
+```
+
+#Appendix: Figures
+Correlation Matrix Visualization
+```{r, echo=FALSE}
+corrPlot <- cor(trainData[, -length(names(trainData))])
+corrplot(corrPlot, method="color")
+```
+Decision Tree Visualization
+```{r, echo=FALSE}
+treeModel <- rpart(classe ~ ., data=trainData, method="class")
+prp(treeModel) # fast plot
+```
