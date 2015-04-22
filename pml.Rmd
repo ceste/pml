@@ -19,7 +19,6 @@ library(corrplot)
 
 #Read the Data
 ```{r, cache=TRUE}
-getwd()
 path <- '/home/chandra/R/pml'
 training.data <- read.csv(paste(path,'pml-training.csv',sep="/"))
 testing.data <- read.csv(paste(path,'pml-testing.csv',sep="/"))
@@ -96,14 +95,3 @@ result <- predict(modFit, clean.testing.data)
 result
 ```
 
-#Appendix: Figures
-Correlation Matrix Visualization
-```{r, echo=FALSE}
-corrPlot <- cor(trainData[, -length(names(trainData))])
-corrplot(corrPlot, method="color")
-```
-Decision Tree Visualization
-```{r, echo=FALSE}
-treeModel <- rpart(classe ~ ., data=trainData, method="class")
-prp(treeModel) # fast plot
-```
